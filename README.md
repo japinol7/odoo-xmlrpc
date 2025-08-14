@@ -33,6 +33,9 @@
 * Odoo integration examples in Python using this Odoo xml-rpc package
     * [odoo-integration-examples](https://github.com/japinol7/odoo-integration-examples)
 
+    Note: You will need to change the imports of the examples from odoo_jsonrpc to odoo_xmlrpc. <br>
+    Ex: from odoo_xmlrpc.odoo_client import OdooClient
+
 <br>
 
 ### Install the last package tag released from this repo in your project
