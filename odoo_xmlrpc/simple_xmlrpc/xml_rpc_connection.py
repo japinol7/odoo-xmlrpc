@@ -47,7 +47,10 @@ class XmlRpcConnection:
 
     def _set_proxy(self):
         log.debug(f"Setting proxy to: {self.server.proxy_url}")
-        _, proxy_url = self.server.proxy_url.split('//')
+        if '//' in self.server.proxy_url:
+            _, proxy_url = self.server.proxy_url.split('//')
+        else:
+            proxy_url = self.server.proxy_url
         proxy_host, proxy_port = proxy_url.split(':')
 
         transport = None
@@ -66,7 +69,7 @@ class XmlRpcConnection:
             log.warning(
                 "Proxy configuration ignored. Feature not implemented "
                 "for xml-rpc over HTTP. Only implemented for HTTPS.")
-        else:
+        elif self.server.proxy_url and self.ssl:
             transport = self._set_proxy()
 
         if self.ssl:
