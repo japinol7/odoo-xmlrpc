@@ -3,32 +3,62 @@ __author__ = 'Joan A. Pinol  (japinol)'
 from xmlrpc import client as xmlrpclib
 import http.client
 
-from .config import PORTS_TO_ACTIVATE_SSL
+from .config import PORTS_TO_ACTIVATE_SSL, TIMEOUT_DEFAULT_SEC
 from .exceptions import UserError
 from ..tools.logger.logger import log
 
 
 class ProxiedHTTPSTransport(xmlrpclib.SafeTransport):
-    def __init__(self, use_datetime=False, context=None):
+    def __init__(self, use_datetime=False, context=None, timeout=None):
         super().__init__(use_datetime=use_datetime, context=context)
         self.proxy_host = None
         self.proxy_port = None
         self.proxy_headers = {}
+        self.timeout = timeout
 
     def set_proxy(self, host, port=None, headers=None):
         """Configure the HTTP proxy used for HTTPS tunneling."""
         self.proxy_host = host
-        self.proxy_port = port
+        self.proxy_port = int(port) if port is not None else None
         self.proxy_headers = headers.copy() if headers else {}
 
     def make_connection(self, host):
         """Build an HTTPSConnection to the proxy and tunnel to the target host."""
         if not self.proxy_host or not self.proxy_port:
-            raise RuntimeError("Proxy not configured. Call set_proxy(host, port, headers) first.")
+            raise RuntimeError(
+                "Proxy not configured. Call set_proxy(host, port, headers) first.")
 
         # Create HTTPS connection to the proxy and set the connect tunnel to the target
-        connection = http.client.HTTPSConnection(self.proxy_host, self.proxy_port, context=self.context)
+        connection = http.client.HTTPSConnection(
+            self.proxy_host,
+            self.proxy_port,
+            timeout=self.timeout,
+            context=self.context,
+            )
         connection.set_tunnel(host, port=None, headers=self.proxy_headers)
+        self._connection = host, connection
+        return connection
+
+
+class TimeoutHTTPTransport(xmlrpclib.Transport):
+    def __init__(self, use_datetime=False, timeout=None):
+        super().__init__(use_datetime=use_datetime)
+        self.timeout = timeout
+
+    def make_connection(self, host):
+        connection = http.client.HTTPConnection(host, timeout=self.timeout)
+        self._connection = host, connection
+        return connection
+
+
+class TimeoutHTTPSTransport(xmlrpclib.SafeTransport):
+    def __init__(self, use_datetime=False, context=None, timeout=None):
+        super().__init__(use_datetime=use_datetime, context=context)
+        self.timeout = timeout
+
+    def make_connection(self, host):
+        connection = http.client.HTTPSConnection(
+            host, timeout=self.timeout, context=self.context)
         self._connection = host, connection
         return connection
 
@@ -42,6 +72,7 @@ class XmlRpcConnection:
         self.models = None
         self.uid = None
         self.ssl = True if server.port in PORTS_TO_ACTIVATE_SSL else False
+        self.timeout = server.timeout or TIMEOUT_DEFAULT_SEC
         self._is_proxy_set = False
         self._connect()
 
@@ -55,7 +86,7 @@ class XmlRpcConnection:
 
         transport = None
         if proxy_host and proxy_port:
-            transport = ProxiedHTTPSTransport()
+            transport = ProxiedHTTPSTransport(timeout=self.timeout)
             transport.set_proxy(host=proxy_host, port=proxy_port)
             self._is_proxy_set = True
         return transport
@@ -72,20 +103,30 @@ class XmlRpcConnection:
         elif self.server.proxy_url and self.ssl:
             transport = self._set_proxy()
 
+        # If no proxy transport is set, configure timeout-aware transport
+        if transport is None:
+            if self.ssl:
+                transport = TimeoutHTTPSTransport(timeout=self.timeout)
+            else:
+                transport = TimeoutHTTPTransport(timeout=self.timeout)
+
+        if self.timeout is not None:
+            log.debug(f"Using connection timeout: {self.timeout}s")
+
         if self.ssl:
             root = 'https://%s:%d/xmlrpc/2/' % (self.server.host, self.server.port)
         else:
             root = 'http://%s:%d/xmlrpc/2/' % (self.server.host, self.server.port)
 
-        self.uid = (xmlrpclib.ServerProxy(root + 'common', transport=transport).login(
-            self.server.dbname, self.server.username, self.server.password)
-            )
+        common = xmlrpclib.ServerProxy(
+            root + 'common', allow_none=True, transport=transport)
 
+        self.uid = common.login(
+            self.server.dbname, self.server.username, self.server.password)
         if not self.uid:
             raise UserError("Wrong username or password!")
 
         # Set endpoints
-        self.common = xmlrpclib.ServerProxy(
-            root + 'common', allow_none=True, transport=transport)
+        self.common = common
         self.models = xmlrpclib.ServerProxy(
             root + 'object', allow_none=True, transport=transport)

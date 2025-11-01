@@ -1,5 +1,6 @@
 __author__ = 'Joan A. Pinol  (japinol)'
 
+TIMEOUT_DEFAULT_SEC = 10
 
 # SSL will be activated for the following ports
 PORTS_TO_ACTIVATE_SSL = 443,
