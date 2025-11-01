@@ -2,7 +2,7 @@
     Odoo xml-rpc client wihout external dependencies.
 <br>
 
-	version: 0.0.2
+	version: 0.0.3
 	author: Joan A. Pinol
 	author_nickname: japinol
 	author_gitHub: japinol7
@@ -41,7 +41,7 @@
 ### Install the last package tag released from this repo in your project
 Add this to your requirements.txt file: <br>
 
-    git+https://github.com/japinol7/odoo-xmlrpc.git@v0.0.2
+    git+https://github.com/japinol7/odoo-xmlrpc.git@v0.0.3
 
 <br>
 Alternatively, if you use an uv toml file: <br>
@@ -51,7 +51,7 @@ Alternatively, if you use an uv toml file: <br>
     ]
     
     [tool.uv.sources]
-    odoo-xmlrpc = { git = "https://github.com/japinol7/odoo-xmlrpc.git", rev = "v0.0.2" }
+    odoo-xmlrpc = { git = "https://github.com/japinol7/odoo-xmlrpc.git", rev = "v0.0.3" }
 
 <br>
 .
