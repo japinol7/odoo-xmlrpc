@@ -100,7 +100,7 @@ class XmlRpcClient:
         return self._connection.execute_kw(
             self._server.dbname, self._uid, self._server.password,
             model_obj_name,
-            'read_group', domain,
+            'read_group', [domain],
             {'fields': fields, 'groupby': group_by, 'limit': limit},
             )
 
@@ -109,7 +109,7 @@ class XmlRpcClient:
         return self._connection.execute_kw(
             self._server.dbname, self._uid, self._server.password,
             model_obj_name,
-            'search', domain,
+            'search', [domain],
             {'order': order, 'limit': limit},
             )
 
@@ -120,7 +120,7 @@ class XmlRpcClient:
         return self._connection.execute_kw(
             self._server.dbname, self._uid, self._server.password,
             model_obj_name,
-            'search_count', domain,
+            'search_count', [domain],
             )
 
     def search_read(
@@ -133,7 +133,7 @@ class XmlRpcClient:
         return self._connection.execute_kw(
             self._server.dbname, self._uid, self._server.password,
             model_obj_name,
-            'search_read', domain,
+            'search_read', [domain],
             {'fields': fields, 'order': order, 'limit': limit},
             )
 

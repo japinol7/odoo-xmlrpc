@@ -1,7 +1,7 @@
 [project]
 name = "odoo-xmlrpc"
 authors = [{name = "Joan A. Pinol  (japinol)"}]
-version = "0.0.3"
+version = "0.0.4"
 classifiers = [
     "License :: MIT License",
 ]
