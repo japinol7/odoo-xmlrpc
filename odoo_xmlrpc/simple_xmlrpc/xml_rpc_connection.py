@@ -69,6 +69,7 @@ class XmlRpcConnection:
     def __init__(self, server):
         self.server = server
         self.common = None
+        self.db = None
         self.models = None
         self.uid = None
         self.ssl = True if server.port in PORTS_TO_ACTIVATE_SSL else False
@@ -128,5 +129,7 @@ class XmlRpcConnection:
 
         # Set endpoints
         self.common = common
+        self.db = xmlrpclib.ServerProxy(
+            root + 'db', allow_none=True, transport=transport)
         self.models = xmlrpclib.ServerProxy(
             root + 'object', allow_none=True, transport=transport)

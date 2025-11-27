@@ -6,15 +6,64 @@ DEFAULT_LIMIT = 50
 class XmlRpcClient:
     """Represents a xml-rpc client."""
 
-    def __init__(self, connection):
+    def __init__(self, connection, context=None):
         self._connection = connection.models
         self._common = connection.common
+        self._db = getattr(connection, 'db', None)
         self._server = connection.server
         self._uid = connection.uid
+        self._context = context or {}
 
+    @property
+    def context(self):
+        """Returns the global context dict."""
+        return self._context
+
+    @context.setter
+    def context(self, value):
+        """Replaces the global context entirely."""
+        if value is None:
+            self._context = {}
+        elif isinstance(value, dict):
+            self._context = value
+        else:
+            raise TypeError("Context must be a dict or None.")
+
+    def update_context(self, **kwargs):
+        """Updates one or more context keys without replacing the whole dict."""
+        self._context.update(kwargs)
+
+    # -------------------------
+    # Helpers
+    # -------------------------
+    def _call_kw(
+            self, model, method, args=None, kwargs=None, context=None
+        ):
+        """Generic helper for execute_kw with merged context."""
+        merged_ctx = {**self._context, **(context or {})}
+        final_kwargs = kwargs.copy() if kwargs else {}
+        final_kwargs['context'] = merged_ctx
+
+        return self._connection.execute_kw(
+            self._server.dbname,
+            self._uid,
+            self._server.password,
+            model,
+            method,
+            args or [],
+            final_kwargs,
+            )
+
+    # -------------------------
+    # Service Calls
+    # -------------------------
     def get_db_list(self):
         """Gets the available databases."""
-        raise Exception("Not implemented yet for xmlrpc.")
+        if not self._db:
+            raise RuntimeError(
+                "DB proxy is not available in the XML-RPC connection.")
+
+        return self._db.list()
 
     def get_server_version(self):
         """Gets the server version."""
@@ -26,131 +75,156 @@ class XmlRpcClient:
 
     def call_service(self, service_obj_name, method, kwargs=None):
         """Calls a given method on a given service object name with
-        the specified kwargs. Service name examples: common, db, object.
+        the specified kwargs. Service name examples: common, db.
         """
-        raise Exception("Not implemented yet for xmlrpc.")
+        service_obj_name = (service_obj_name or '').lower()
+        if service_obj_name == 'common':
+            proxy = self._common
+        elif service_obj_name == 'db':
+            if not self._db:
+                raise RuntimeError(
+                    "DB proxy is not available in the XML-RPC connection.")
+            proxy = self._db
+        else:
+            raise ValueError(
+                f"Unknown service name: {service_obj_name}")
+
+        func = getattr(proxy, method)
+        if kwargs is None:
+            return func()
+        return func(**kwargs)
 
     def call_common(self, method, kwargs=None):
         """Calls a given method on the common service
         with the specified kwargs.
         """
-        raise Exception("Not implemented yet for xmlrpc.")
+        func = getattr(self._common, method)
+        if kwargs is None:
+            return func()
+        return func(**kwargs)
 
     def call_db(self, method, kwargs=None):
         """Calls a given method on the db service
         with the specified kwargs.
         """
-        raise Exception("Not implemented yet for xmlrpc.")
+        if not self._db:
+            raise RuntimeError(
+                "DB proxy is not available in the XML-RPC connection.")
 
-    def call(self, model_obj_name, method, ids, args=None, kwargs=None):
-        """Calls a given method on given model object instances
-        with the specified positional args and kwargs.
-        Recommended way to call a normal recordset method.
-        """
-        ids = ids or []
-        args = args or []
-        args = [ids] + args
-
-        return self._connection.execute_kw(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            method, args, kwargs or {},
-            )
-
-    def call_on_model(self, model_obj_name, method, args=None, kwargs=None):
-        """Calls a given method on a given model object name
-        with the specified positional args and kwargs.
-        Recommended way to call an api.model method.
-        """
+        func = getattr(self._db, method)
         if kwargs is None:
-            return self._connection.execute_kw(
-                self._server.dbname, self._uid, self._server.password,
-                model_obj_name,
-                method, args or [],
-                )
+            return func()
 
-        return self._connection.execute_kw(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            method, args or [], kwargs or {},
+        return func(**kwargs)
+
+    # -------------------------
+    # Model Calls
+    # -------------------------
+    def call(
+            self, model_obj_name, method, ids, args=None, kwargs=None, context=None
+        ):
+        """Calls a recordset-level method (api.multi / api.onchange-style)."""
+        ids = ids or []
+        full_args = [ids] + (args or [])
+
+        return self._call_kw(
+            model_obj_name, method, full_args, kwargs, context,
             )
 
-    def create(self, model_obj_name, values):
+    def call_on_model(
+            self, model_obj_name, method, args=None, kwargs=None, context=None
+        ):
+        """Calls an @api.model method (no recordset)."""
+        return self._call_kw(
+            model_obj_name, method, args, kwargs, context,
+            )
+
+    # -------------------------
+    # CRUD API
+    # -------------------------
+    def create(
+            self, model_obj_name, values, context=None, **kwargs
+        ):
         """Creates a document object with the specified values."""
-        return self._connection.execute(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            'create', values,
+        return self._call_kw(
+            model_obj_name, 'create',
+            [values], kwargs, context,
             )
 
-    def read(self, model_obj_name, ids, fields):
+    def read(
+            self, model_obj_name, ids, fields, context=None, **kwargs
+        ):
         """Gets the values of the document object for the specified ids."""
-        return self._connection.execute(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            'read', ids, fields,
+        return self._call_kw(
+            model_obj_name, 'read',
+            [ids, fields], kwargs, context,
             )
 
     def read_group(
-            self, model_obj_name, domain, fields, group_by, limit=DEFAULT_LIMIT
+            self, model_obj_name, domain, fields, group_by,
+            limit=DEFAULT_LIMIT, context=None, **kwargs
         ):
         """Returns a list of dictionaries with the aggregate results
         grouped by the `group_by` field.
         """
-        return self._connection.execute_kw(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            'read_group', [domain],
-            {'fields': fields, 'groupby': group_by, 'limit': limit},
+        kw = {'fields': fields, 'groupby': group_by, 'limit': limit, **kwargs}
+        return self._call_kw(
+            model_obj_name, 'read_group',
+            [domain], kw, context,
             )
 
-    def search(self, model_obj_name, domain, order=None, limit=DEFAULT_LIMIT):
+    def search(
+            self, model_obj_name, domain, order=None,
+            limit=DEFAULT_LIMIT, context=None, **kwargs
+        ):
         """Gets the ids of the document object that match the specified domain."""
-        return self._connection.execute_kw(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            'search', [domain],
-            {'order': order, 'limit': limit},
+        kw = {'order': order, 'limit': limit, **kwargs}
+        return self._call_kw(
+            model_obj_name, 'search',
+            [domain], kw, context,
             )
 
-    def search_count(self, model_obj_name, domain):
+    def search_count(
+            self, model_obj_name, domain, context=None, **kwargs
+        ):
         """Returns the number of ids for the document object that match the
         specified domain.
         """
-        return self._connection.execute_kw(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            'search_count', [domain],
+        return self._call_kw(
+            model_obj_name, 'search_count',
+            [domain], kwargs, context,
             )
 
     def search_read(
-            self, model_obj_name, domain, fields, order=None, limit=DEFAULT_LIMIT
+            self, model_obj_name, domain, fields, order=None,
+            limit=DEFAULT_LIMIT, context=None, **kwargs
         ):
         """Combines the search and read operations in one call.
         Returns a list of dictionaries with the required fields for each object
         that matches the specified domain.
         """
-        return self._connection.execute_kw(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            'search_read', [domain],
-            {'fields': fields, 'order': order, 'limit': limit},
+        kw = {'fields': fields, 'order': order, 'limit': limit, **kwargs}
+        return self._call_kw(
+            model_obj_name, 'search_read',
+            [domain], kw, context,
             )
 
-    def write(self, model_obj_name, ids, values):
+    def write(
+            self, model_obj_name, ids, values, context=None, **kwargs
+        ):
         """Updates the document objects for the specified ids with the specified
         values.
         """
-        return self._connection.execute(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            'write', ids, values,
+        return self._call_kw(
+            model_obj_name, 'write',
+            [ids, values], kwargs, context,
             )
 
-    def unlink(self, model_obj_name, ids):
+    def unlink(
+            self, model_obj_name, ids, context=None, **kwargs
+        ):
         """Deletes the document objects that match the specified ids."""
-        return self._connection.execute(
-            self._server.dbname, self._uid, self._server.password,
-            model_obj_name,
-            'unlink', ids,
+        return self._call_kw(
+            model_obj_name, 'unlink',
+            [ids], kwargs, context,
             )
