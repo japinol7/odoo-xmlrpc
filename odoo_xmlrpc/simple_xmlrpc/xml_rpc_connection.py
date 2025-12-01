@@ -72,10 +72,18 @@ class XmlRpcConnection:
         self.db = None
         self.models = None
         self.uid = None
-        self.ssl = True if server.port in PORTS_TO_ACTIVATE_SSL else False
+        self.ssl = self._is_ssl(server)
         self.timeout = server.timeout or TIMEOUT_DEFAULT_SEC
         self._is_proxy_set = False
         self._connect()
+
+    @staticmethod
+    def _is_ssl(server):
+        """Allows overriding SSL port-based default using an explicit flag in the server config."""
+        if server.ssl is None:
+            return True if server.port in PORTS_TO_ACTIVATE_SSL else False
+
+        return True if server.ssl is True else False
 
     def _set_proxy(self):
         log.debug(f"Setting proxy to: {self.server.proxy_url}")

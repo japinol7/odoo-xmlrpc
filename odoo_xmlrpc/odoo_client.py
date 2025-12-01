@@ -7,17 +7,17 @@ from .simple_xmlrpc import XmlRpcClient, XmlRpcConnection
 
 ServerConfig = namedtuple(
     "ServerConfig",
-    "host dbname username password port proxy_url timeout"
+    "host dbname username password port proxy_url ssl timeout"
     )
 
 
 class OdooClient:
     def __init__(
             self, host, dbname, username, password=None,
-            port=None, proxy_url=None, timeout=None
+            port=None, proxy_url=None, ssl=None, timeout=None
         ):
         self._server_data = self._get_server_data(
-            host, dbname, username, password, port, proxy_url, timeout
+            host, dbname, username, password, port, proxy_url, ssl, timeout
             )
         self.client = self._get_client()
 
@@ -29,7 +29,7 @@ class OdooClient:
 
     def _get_server_data(
             self, host, dbname, username, password,
-            port, proxy_url, timeout
+            port, proxy_url, ssl, timeout
         ):
         if port is None:
             raise ValueError("port must be specified")
@@ -38,4 +38,4 @@ class OdooClient:
             password = getpass.getpass("Password/API Key token: ")
 
         return ServerConfig(
-            host, dbname, username, password, port, proxy_url, timeout)
+            host, dbname, username, password, port, proxy_url, ssl, timeout)
