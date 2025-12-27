@@ -1,5 +1,8 @@
 __author__ = 'Joan A. Pinol  (japinol)'
 
+from .config import CLIENT_NAME
+from ..tools.logger.logger import log
+
 DEFAULT_LIMIT = 50
 
 
@@ -121,82 +124,88 @@ class XmlRpcClient:
     # Model Calls
     # -------------------------
     def call(
-            self, model_obj_name, method, ids, args=None, kwargs=None, context=None
+            self, model, method, ids, args=None, kwargs=None, context=None
         ):
         """Calls a recordset-level method (api.multi / api.onchange-style)."""
         ids = ids or []
         full_args = [ids] + (args or [])
 
         return self._call_kw(
-            model_obj_name, method, full_args, kwargs, context,
+            model, method, full_args, kwargs, context,
             )
 
     def call_on_model(
-            self, model_obj_name, method, args=None, kwargs=None, context=None
+            self, model, method, args=None, kwargs=None, context=None
         ):
         """Calls an @api.model method (no recordset)."""
         return self._call_kw(
-            model_obj_name, method, args, kwargs, context,
+            model, method, args, kwargs, context,
             )
 
     # -------------------------
     # CRUD API
     # -------------------------
     def create(
-            self, model_obj_name, values, context=None, **kwargs
+            self, model, vals, context=None, **kwargs
         ):
         """Creates a document object with the specified values."""
         return self._call_kw(
-            model_obj_name, 'create',
-            [values], kwargs, context,
+            model, 'create',
+            [vals], kwargs, context,
             )
 
     def read(
-            self, model_obj_name, ids, fields, context=None, **kwargs
+            self, model, ids, fields, context=None, **kwargs
         ):
         """Gets the values of the document object for the specified ids."""
         return self._call_kw(
-            model_obj_name, 'read',
+            model, 'read',
             [ids, fields], kwargs, context,
             )
 
     def read_group(
-            self, model_obj_name, domain, fields, group_by,
-            limit=DEFAULT_LIMIT, context=None, **kwargs
+            self, model, domain, fields, group_by,
+            context=None, **kwargs
         ):
         """Returns a list of dictionaries with the aggregate results
         grouped by the `group_by` field.
         """
-        kw = {'fields': fields, 'groupby': group_by, 'limit': limit, **kwargs}
+        kw = {'fields': fields, 'groupby': group_by, **kwargs}
         return self._call_kw(
-            model_obj_name, 'read_group',
+            model, 'read_group',
             [domain], kw, context,
             )
 
     def search(
-            self, model_obj_name, domain, order=None,
+            self, model, domain, order=None,
             limit=DEFAULT_LIMIT, context=None, **kwargs
         ):
         """Gets the ids of the document object that match the specified domain."""
         kw = {'order': order, 'limit': limit, **kwargs}
-        return self._call_kw(
-            model_obj_name, 'search',
+        res = self._call_kw(
+            model, 'search',
             [domain], kw, context,
             )
 
+        if limit and limit != 1 and len(res) == limit:
+            log.info(f"{CLIENT_NAME}: Search result truncated to {limit} records. "
+                "Use limit=0 to retrieve all results.")
+
+        return res
+
     def search_count(
-            self, model_obj_name, domain, context=None, **kwargs
+            self, model, domain, context=None, **kwargs
         ):
         """Returns the number of ids for the document object that match the
         specified domain.
         """
         return self._call_kw(
-            model_obj_name, 'search_count',
+            model, 'search_count',
             [domain], kwargs, context,
             )
 
     def search_read(
-            self, model_obj_name, domain, fields, order=None,
+            self, model, domain, fields, order=None,
             limit=DEFAULT_LIMIT, context=None, **kwargs
         ):
         """Combines the search and read operations in one call.
@@ -204,27 +213,33 @@ class XmlRpcClient:
         that matches the specified domain.
         """
         kw = {'fields': fields, 'order': order, 'limit': limit, **kwargs}
-        return self._call_kw(
-            model_obj_name, 'search_read',
+        res = self._call_kw(
+            model, 'search_read',
             [domain], kw, context,
             )
 
+        if limit and limit != 1 and len(res) == limit:
+            log.info(f"{CLIENT_NAME}: Search result truncated to {limit} records. "
+                        "Use limit=0 to retrieve all results.")
+
+        return res
+
     def write(
-            self, model_obj_name, ids, values, context=None, **kwargs
+            self, model, ids, vals, context=None, **kwargs
         ):
         """Updates the document objects for the specified ids with the specified
         values.
         """
         return self._call_kw(
-            model_obj_name, 'write',
-            [ids, values], kwargs, context,
+            model, 'write',
+            [ids, vals], kwargs, context,
             )
 
     def unlink(
-            self, model_obj_name, ids, context=None, **kwargs
+            self, model, ids, context=None, **kwargs
         ):
         """Deletes the document objects that match the specified ids."""
         return self._call_kw(
-            model_obj_name, 'unlink',
+            model, 'unlink',
             [ids], kwargs, context,
             )
